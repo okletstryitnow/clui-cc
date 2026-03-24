@@ -439,9 +439,9 @@ export function StatusBar() {
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={handleOpenInTerminal}
-          className="flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 transition-colors"
+          className="flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 transition-colors cursor-pointer"
           style={{ color: colors.textTertiary }}
-          title="Open this session in Terminal"
+          title="Open this session in Ghostty"
         >
           Open in CLI
           <Terminal size={11} />

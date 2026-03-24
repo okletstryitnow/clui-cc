@@ -912,6 +912,8 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?:
     projectPath = arg.projectPath && arg.projectPath !== '~' ? arg.projectPath : process.cwd()
   }
 
+  log(`OPEN_IN_TERMINAL: sessionId=${sessionId} projectPath=${projectPath}`)
+
   // Validate sessionId — must be a strict UUID to prevent injection into the shell command
   if (sessionId && !UUID_RE.test(sessionId)) {
     log(`OPEN_IN_TERMINAL: rejected invalid sessionId: ${sessionId}`)
@@ -927,10 +929,7 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?:
   // Shell-safe single-quote escaping: replace ' with '\'' (end quote, escaped literal quote, reopen quote)
   // Single quotes block all shell expansion ($, `, \, etc.) — unlike double quotes which allow $() and backticks
   const shellSingleQuote = (s: string): string => "'" + s.replace(/'/g, "'\\''") + "'"
-  // AppleScript string escaping: backslashes doubled, double quotes escaped
-  const escapeAppleScript = (s: string): string => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-
-  const safeDir = escapeAppleScript(shellSingleQuote(projectPath))
+  const safeDir = shellSingleQuote(projectPath)
 
   let cmd: string
   if (sessionId) {
@@ -940,19 +939,17 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?:
     cmd = `cd ${safeDir} && ${claudeBin}`
   }
 
-  const script = `tell application "Terminal"
-  activate
-  do script "${cmd}"
-end tell`
-
   try {
-    execFile('/usr/bin/osascript', ['-e', script], (err: Error | null) => {
-      if (err) log(`Failed to open terminal: ${err.message}`)
-      else log(`Opened terminal with: ${cmd}`)
+    // --command= is a single argument so open --args can't split it.
+    // /bin/zsh -lc loads login shell environment (PATH, nvm, conda, etc.)
+    const ghosttyCmd = `/bin/zsh -lc ${shellSingleQuote(cmd)}`
+    execFile('/usr/bin/open', ['-na', 'Ghostty', '--args', `--command=${ghosttyCmd}`], (err: Error | null) => {
+      if (err) log(`Failed to open Ghostty: ${err.message}`)
+      else log(`Opened Ghostty with: ${cmd}`)
     })
     return true
   } catch (err: unknown) {
-    log(`Failed to open terminal: ${err}`)
+    log(`Failed to open Ghostty: ${err}`)
     return false
   }
 })
