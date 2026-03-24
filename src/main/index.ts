@@ -1076,6 +1076,29 @@ app.whenReady().then(async () => {
   }
   globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
 
+  // ─── Dock auto-hide tracking ───
+  // macOS has no event for Dock slide-in/out, but workArea changes dynamically.
+  // Poll every 300ms while visible to reposition when Dock appears/disappears.
+  let lastWorkAreaHeight = 0
+  setInterval(() => {
+    if (!mainWindow || !mainWindow.isVisible()) return
+    const cursor = screen.getCursorScreenPoint()
+    const display = screen.getDisplayNearestPoint(cursor)
+    const { height: sh } = display.workAreaSize
+    if (sh !== lastWorkAreaHeight && lastWorkAreaHeight !== 0) {
+      const { width: sw } = display.workAreaSize
+      const { x: dx, y: dy } = display.workArea
+      mainWindow.setBounds({
+        x: dx + Math.round((sw - BAR_WIDTH) / 2),
+        y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+        width: BAR_WIDTH,
+        height: PILL_HEIGHT,
+      })
+      log(`[dock] workArea height changed ${lastWorkAreaHeight}→${sh}, repositioned`)
+    }
+    lastWorkAreaHeight = sh
+  }, 300)
+
   const trayIconPath = join(__dirname, '../../resources/trayTemplate.png')
   const trayIcon = nativeImage.createFromPath(trayIconPath)
   trayIcon.setTemplateImage(true)
