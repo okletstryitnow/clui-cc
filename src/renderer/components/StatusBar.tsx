@@ -5,6 +5,7 @@ import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck } from '@p
 import { useSessionStore, AVAILABLE_MODELS, getModelDisplayLabel } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
+import { useThemeStore } from '../theme'
 
 /* ─── Model Picker (inline — tightly coupled to StatusBar) ─── */
 
@@ -295,9 +296,10 @@ export function StatusBar() {
   const isRunning = tab.status === 'running' || tab.status === 'connecting'
   const isEmpty = tab.messages.length === 0
   const hasExtraDirs = tab.additionalDirs.length > 0
+  const terminalApp = useThemeStore((s) => s.terminalApp)
 
   const handleOpenInTerminal = () => {
-    window.clui.openInTerminal(tab.claudeSessionId, tab.workingDirectory)
+    window.clui.openInTerminal(tab.claudeSessionId, tab.workingDirectory, terminalApp)
   }
 
   const handleDirClick = () => {
@@ -441,7 +443,7 @@ export function StatusBar() {
           onClick={handleOpenInTerminal}
           className="flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 transition-colors cursor-pointer"
           style={{ color: colors.textTertiary }}
-          title="Open this session in Ghostty"
+          title={`Open this session in ${terminalApp === 'auto' ? 'terminal' : terminalApp === 'iterm' ? 'iTerm2' : terminalApp === 'ghostty' ? 'Ghostty' : 'Terminal'}`}
         >
           Open in CLI
           <Terminal size={11} />
