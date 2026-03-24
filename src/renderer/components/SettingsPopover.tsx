@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, ArrowsOutSimple, Moon } from '@phosphor-icons/react'
+import { DotsThree, Bell, ArrowsOutSimple, Moon, Terminal, Check } from '@phosphor-icons/react'
 import { useThemeStore } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
@@ -38,6 +38,77 @@ function RowToggle({
         }}
       />
     </button>
+  )
+}
+
+/* ─── Terminal picker (inline dropdown) ─── */
+
+function TerminalPicker() {
+  const terminalApp = useThemeStore((s) => s.terminalApp)
+  const setTerminalApp = useThemeStore((s) => s.setTerminalApp)
+  const colors = useColors()
+  const [terminals, setTerminals] = useState<Array<{ id: string; label: string; installed: boolean; hasTmux?: boolean }>>([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    window.clui.detectTerminals().then(setTerminals).catch(() => {})
+  }, [])
+
+  const installed = terminals.filter((t) => t.installed)
+  const autoTerminal = installed[0]
+  const currentLabel = terminalApp === 'auto'
+    ? `Auto${autoTerminal ? ` (${autoTerminal.label})` : ''}`
+    : installed.find((t) => t.id === terminalApp)?.label || 'Auto'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Terminal size={14} style={{ color: colors.textTertiary }} />
+          <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+            Terminal
+          </div>
+        </div>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="text-[11px] px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+          style={{ color: colors.textSecondary, background: colors.surfacePrimary }}
+        >
+          {currentLabel}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-1.5 rounded-lg overflow-hidden" style={{ border: `1px solid ${colors.popoverBorder}` }}>
+          {/* Auto option */}
+          <button
+            onClick={() => { setTerminalApp('auto' as any); setOpen(false) }}
+            className="w-full text-left text-[11px] px-2.5 py-1.5 transition-colors cursor-pointer flex items-center justify-between"
+            style={{
+              color: terminalApp === 'auto' ? colors.accent : colors.textSecondary,
+              background: terminalApp === 'auto' ? colors.accentLight : 'transparent',
+            }}
+          >
+            <span>Auto{autoTerminal ? ` (${autoTerminal.label})` : ''}</span>
+            {terminalApp === 'auto' && <Check size={12} />}
+          </button>
+          {/* Installed terminals */}
+          {installed.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { setTerminalApp(t.id as any); setOpen(false) }}
+              className="w-full text-left text-[11px] px-2.5 py-1.5 transition-colors cursor-pointer flex items-center justify-between"
+              style={{
+                color: terminalApp === t.id ? colors.accent : colors.textSecondary,
+                background: terminalApp === t.id ? colors.accentLight : 'transparent',
+              }}
+            >
+              <span>{t.label}{t.id === 'iterm' && t.hasTmux ? ' (tmux)' : ''}</span>
+              {terminalApp === t.id && <Check size={12} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -221,6 +292,11 @@ export function SettingsPopover() {
                 />
               </div>
             </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Terminal */}
+            <TerminalPicker />
           </div>
         </motion.div>,
         popoverLayer,
