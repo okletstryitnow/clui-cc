@@ -1051,6 +1051,19 @@ app.whenReady().then(async () => {
     screen.on('display-metrics-changed', (_e, display, changedMetrics) => {
       log(`[spaces] event display-metrics-changed id=${display.id} changed=${changedMetrics.join(',')}`)
       snapshotWindowState('event display-metrics-changed')
+
+      // Reposition when workArea changes (e.g. Dock auto-hide toggle, Dock resize)
+      if (changedMetrics.includes('workArea') && mainWindow && mainWindow.isVisible()) {
+        const { width: sw, height: sh } = display.workAreaSize
+        const { x: dx, y: dy } = display.workArea
+        mainWindow.setBounds({
+          x: dx + Math.round((sw - BAR_WIDTH) / 2),
+          y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+          width: BAR_WIDTH,
+          height: PILL_HEIGHT,
+        })
+        log(`[spaces] repositioned for workArea change`)
+      }
     })
   }
 
