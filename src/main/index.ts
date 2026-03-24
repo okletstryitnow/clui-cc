@@ -8,6 +8,8 @@ import { ensureSkills, type SkillStatus } from './skills/installer'
 import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './marketplace/catalog'
 import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getCliEnv } from './cli-env'
+import { detectTerminals, resolveTerminal, launchTerminal } from './terminal-launcher'
+import type { TerminalId } from './terminal-launcher'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError } from '../shared/types'
 
@@ -896,8 +898,7 @@ ipcMain.handle(IPC.GET_DIAGNOSTICS, () => {
   }
 })
 
-ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?: string | null; projectPath?: string }) => {
-  const { execFile } = require('child_process')
+ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?: string | null; projectPath?: string; terminal?: string }) => {
   const claudeBin = 'claude'
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -926,32 +927,28 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?:
     return false
   }
 
-  // Shell-safe single-quote escaping: replace ' with '\'' (end quote, escaped literal quote, reopen quote)
-  // Single quotes block all shell expansion ($, `, \, etc.) — unlike double quotes which allow $() and backticks
-  const shellSingleQuote = (s: string): string => "'" + s.replace(/'/g, "'\\''") + "'"
-  const safeDir = shellSingleQuote(projectPath)
-
   let cmd: string
   if (sessionId) {
-    // sessionId is UUID-validated above, safe to embed directly
-    cmd = `cd ${safeDir} && ${claudeBin} --resume ${sessionId}`
+    cmd = `${claudeBin} --resume ${sessionId}`
   } else {
-    cmd = `cd ${safeDir} && ${claudeBin}`
+    cmd = claudeBin
   }
 
-  try {
-    // --command= is a single argument so open --args can't split it.
-    // /bin/zsh -lc loads login shell environment (PATH, nvm, conda, etc.)
-    const ghosttyCmd = `/bin/zsh -lc ${shellSingleQuote(cmd)}`
-    execFile('/usr/bin/open', ['-na', 'Ghostty', '--args', `--command=${ghosttyCmd}`], (err: Error | null) => {
-      if (err) log(`Failed to open Ghostty: ${err.message}`)
-      else log(`Opened Ghostty with: ${cmd}`)
-    })
-    return true
-  } catch (err: unknown) {
-    log(`Failed to open Ghostty: ${err}`)
+  const terminalPref: TerminalId = (typeof arg === 'object' && arg !== null && 'terminal' in arg) ? (arg.terminal as TerminalId) || 'auto' : 'auto'
+  const terminals = detectTerminals()
+  const terminal = resolveTerminal(terminalPref, terminals)
+
+  if (!terminal) {
+    log('OPEN_IN_TERMINAL: no terminal available')
     return false
   }
+
+  launchTerminal(terminal, cmd, projectPath)
+  return true
+})
+
+ipcMain.handle(IPC.DETECT_TERMINALS, () => {
+  return detectTerminals()
 })
 
 // ─── Marketplace IPC ───

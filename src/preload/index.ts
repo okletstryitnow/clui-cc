@@ -15,7 +15,8 @@ export interface CluiAPI {
   closeTab(tabId: string): Promise<void>
   selectDirectory(): Promise<string | null>
   openExternal(url: string): Promise<boolean>
-  openInTerminal(sessionId: string | null, projectPath?: string): Promise<boolean>
+  detectTerminals(): Promise<Array<{ id: string; label: string; installed: boolean; hasTmux?: boolean }>>
+  openInTerminal(sessionId: string | null, projectPath?: string, terminal?: string): Promise<boolean>
   attachFiles(): Promise<Attachment[] | null>
   takeScreenshot(): Promise<Attachment | null>
   pasteImage(dataUrl: string): Promise<Attachment | null>
@@ -64,7 +65,8 @@ const api: CluiAPI = {
   closeTab: (tabId) => ipcRenderer.invoke(IPC.CLOSE_TAB, tabId),
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
   openExternal: (url) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, url),
-  openInTerminal: (sessionId, projectPath) => ipcRenderer.invoke(IPC.OPEN_IN_TERMINAL, { sessionId, projectPath }),
+  detectTerminals: () => ipcRenderer.invoke(IPC.DETECT_TERMINALS),
+  openInTerminal: (sessionId, projectPath, terminal) => ipcRenderer.invoke(IPC.OPEN_IN_TERMINAL, { sessionId, projectPath, terminal }),
   attachFiles: () => ipcRenderer.invoke(IPC.ATTACH_FILES),
   takeScreenshot: () => ipcRenderer.invoke(IPC.TAKE_SCREENSHOT),
   pasteImage: (dataUrl) => ipcRenderer.invoke(IPC.PASTE_IMAGE, dataUrl),
