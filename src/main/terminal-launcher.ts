@@ -129,11 +129,9 @@ function launchITerm(cmd: string, projectPath: string, hasTmux: boolean): void {
 
   const escaped = escapeAppleScript(shellCmd)
   const script = [
-    'tell application "iTerm2"',
+    'tell application "iTerm"',
     '  activate',
-    '  tell current window',
-    `    create tab with default profile command "${escaped}"`,
-    '  end tell',
+    `  create window with default profile command "/bin/zsh -lc \\"${escaped}\\""`,
     'end tell',
   ].join('\n')
 
