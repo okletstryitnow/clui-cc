@@ -32,9 +32,37 @@ const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
-const BAR_WIDTH = 1040
+const BAR_WIDTH = 1400
 const PILL_HEIGHT = 720  // Fixed native window height — extra room for expanded UI + shadow buffers
-const PILL_BOTTOM_MARGIN = 24
+const BASE_BOTTOM_MARGIN = 24
+
+/**
+ * Dynamic bottom margin: if the display's workArea already accounts for a
+ * bottom Dock (permanent Dock), use the small base margin. If workArea
+ * extends to the screen bottom (auto-hide Dock), read Dock prefs and add
+ * enough margin so the pill clears the Dock when it slides in.
+ */
+function getBottomMargin(display: Electron.Display): number {
+  const screenBottom = display.bounds.y + display.bounds.height
+  const workAreaBottom = display.workArea.y + display.workArea.height
+  // If workArea is shorter than screen, a permanent Dock is present — workArea handles it
+  if (screenBottom - workAreaBottom > 10) return BASE_BOTTOM_MARGIN
+  // Auto-hide or no bottom Dock — check Dock prefs
+  try {
+    const { execFileSync } = require('child_process')
+    const autohide = execFileSync('defaults', ['read', 'com.apple.dock', 'autohide'], { encoding: 'utf-8' }).trim()
+    if (autohide !== '1') return BASE_BOTTOM_MARGIN
+    const orientation = execFileSync('defaults', ['read', 'com.apple.dock', 'orientation'], { encoding: 'utf-8' }).trim()
+    if (orientation !== 'bottom') return BASE_BOTTOM_MARGIN
+    // Use tilesize (unmagnified) — when user interacts with the pill their
+    // cursor is above the Dock, so magnification is not active.
+    const tilesize = parseInt(execFileSync('defaults', ['read', 'com.apple.dock', 'tilesize'], { encoding: 'utf-8' }).trim(), 10) || 48
+    // Dock chrome adds ~22px padding around icons
+    return Math.max(BASE_BOTTOM_MARGIN, tilesize + 22)
+  } catch {
+    return BASE_BOTTOM_MARGIN
+  }
+}
 
 // ─── Broadcast to renderer ───
 
@@ -101,7 +129,7 @@ function createWindow(): void {
   const { x: dx, y: dy } = display.workArea
 
   const x = dx + Math.round((screenWidth - BAR_WIDTH) / 2)
-  const y = dy + screenHeight - PILL_HEIGHT - PILL_BOTTOM_MARGIN
+  const y = dy + screenHeight - PILL_HEIGHT - getBottomMargin(display)
 
   mainWindow = new BrowserWindow({
     width: BAR_WIDTH,
@@ -170,7 +198,7 @@ function showWindow(source = 'unknown'): void {
   const { x: dx, y: dy } = display.workArea
   mainWindow.setBounds({
     x: dx + Math.round((sw - BAR_WIDTH) / 2),
-    y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+    y: dy + sh - PILL_HEIGHT - getBottomMargin(display),
     width: BAR_WIDTH,
     height: PILL_HEIGHT,
   })
@@ -1058,7 +1086,7 @@ app.whenReady().then(async () => {
         const { x: dx, y: dy } = display.workArea
         mainWindow.setBounds({
           x: dx + Math.round((sw - BAR_WIDTH) / 2),
-          y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+          y: dy + sh - PILL_HEIGHT - getBottomMargin(display),
           width: BAR_WIDTH,
           height: PILL_HEIGHT,
         })
@@ -1075,29 +1103,6 @@ app.whenReady().then(async () => {
     log('Alt+Space shortcut registration failed — macOS input sources may claim it')
   }
   globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
-
-  // ─── Dock auto-hide tracking ───
-  // macOS has no event for Dock slide-in/out, but workArea changes dynamically.
-  // Poll every 300ms while visible to reposition when Dock appears/disappears.
-  let lastWorkAreaHeight = 0
-  setInterval(() => {
-    if (!mainWindow || !mainWindow.isVisible()) return
-    const cursor = screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint(cursor)
-    const { height: sh } = display.workAreaSize
-    if (sh !== lastWorkAreaHeight && lastWorkAreaHeight !== 0) {
-      const { width: sw } = display.workAreaSize
-      const { x: dx, y: dy } = display.workArea
-      mainWindow.setBounds({
-        x: dx + Math.round((sw - BAR_WIDTH) / 2),
-        y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
-        width: BAR_WIDTH,
-        height: PILL_HEIGHT,
-      })
-      log(`[dock] workArea height changed ${lastWorkAreaHeight}→${sh}, repositioned`)
-    }
-    lastWorkAreaHeight = sh
-  }, 300)
 
   const trayIconPath = join(__dirname, '../../resources/trayTemplate.png')
   const trayIcon = nativeImage.createFromPath(trayIconPath)

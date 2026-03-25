@@ -95,10 +95,13 @@ export default function App() {
   const marketplaceOpen = useSessionStore((s) => s.marketplaceOpen)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
 
-  // Layout dimensions — expandedUI widens and heightens the panel
-  const contentWidth = expandedUI ? 700 : spacing.contentWidth
-  const cardExpandedWidth = expandedUI ? 700 : 460
-  const cardCollapsedWidth = expandedUI ? 670 : 430
+  const pillScale = useThemeStore((s) => s.pillScale)
+  const scale = pillScale / 100
+
+  // Layout dimensions — expandedUI widens and heightens the panel, pillScale scales horizontally
+  const contentWidth = Math.round((expandedUI ? 700 : spacing.contentWidth) * scale)
+  const cardExpandedWidth = Math.round((expandedUI ? 700 : 460) * scale)
+  const cardCollapsedWidth = Math.round((expandedUI ? 670 : 430) * scale)
   const cardCollapsedMargin = expandedUI ? 15 : 15
   const bodyMaxHeight = expandedUI ? 520 : 400
 
@@ -119,7 +122,7 @@ export default function App() {
       <div className="flex flex-col justify-end h-full" style={{ background: 'transparent' }}>
 
         {/* ─── 460px content column, centered. Circles overflow left. ─── */}
-        <div style={{ width: contentWidth, position: 'relative', margin: '0 auto', transition: 'width 0.26s cubic-bezier(0.4, 0, 0.1, 1)' }}>
+        <div data-clui-column style={{ width: contentWidth, position: 'relative', margin: '0 auto', transition: 'width 0.08s linear' }}>
 
           <AnimatePresence initial={false}>
             {marketplaceOpen && (
@@ -165,7 +168,6 @@ export default function App() {
             data-clui-ui
             className="overflow-hidden flex flex-col drag-region"
             animate={{
-              width: isExpanded ? cardExpandedWidth : cardCollapsedWidth,
               marginBottom: isExpanded ? 10 : -14,
               marginLeft: isExpanded ? 0 : cardCollapsedMargin,
               marginRight: isExpanded ? 0 : cardCollapsedMargin,
@@ -175,11 +177,13 @@ export default function App() {
             }}
             transition={TRANSITION}
             style={{
+              width: isExpanded ? cardExpandedWidth : cardCollapsedWidth,
               borderWidth: 1,
               borderStyle: 'solid',
               borderRadius: 20,
               position: 'relative',
               zIndex: isExpanded ? 20 : 10,
+              transition: 'width 0.08s linear',
             }}
           >
             {/* Tab strip — always mounted */}

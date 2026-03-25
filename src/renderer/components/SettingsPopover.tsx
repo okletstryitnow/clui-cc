@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, ArrowsOutSimple, Moon, Terminal, Check } from '@phosphor-icons/react'
+import { DotsThree, Bell, ArrowsOutSimple, ArrowsHorizontal, Moon, Terminal, Check } from '@phosphor-icons/react'
 import { useThemeStore } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
@@ -42,6 +42,58 @@ function RowToggle({
 }
 
 /* ─── Terminal picker (inline dropdown) ─── */
+
+function PillScaleSlider() {
+  const pillScale = useThemeStore((s) => s.pillScale)
+  const setPillScale = useThemeStore((s) => s.setPillScale)
+  const colors = useColors()
+  const [local, setLocal] = useState(pillScale)
+  const [dragging, setDragging] = useState(false)
+
+  // Sync local when store changes externally
+  useEffect(() => { if (!dragging) setLocal(pillScale) }, [pillScale, dragging])
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <ArrowsHorizontal size={14} style={{ color: colors.textTertiary }} />
+          <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+            Width
+          </div>
+        </div>
+        <div className="text-[11px]" style={{ color: colors.textTertiary }}>{local}%</div>
+      </div>
+      <input
+        type="range"
+        min={75}
+        max={150}
+        step={5}
+        value={local}
+        onChange={(e) => {
+          const v = Number(e.target.value)
+          setLocal(v)
+          setPillScale(v)
+          // Sync Full Width toggle with slider position
+          const expanded = useThemeStore.getState().expandedUI
+          if (v >= 150 && !expanded) useThemeStore.getState().setExpandedUI(true)
+          if (v < 150 && expanded) useThemeStore.getState().setExpandedUI(false)
+        }}
+        onPointerDown={() => {
+          setDragging(true)
+          window.dispatchEvent(new CustomEvent('clui-scale-start'))
+        }}
+        onPointerUp={() => {
+          setDragging(false)
+          // Signal popover to glide to new button position
+          window.dispatchEvent(new CustomEvent('clui-scale-done'))
+        }}
+        className="w-full mt-1 cursor-pointer"
+        style={{ accentColor: colors.accent, height: 4 }}
+      />
+    </div>
+  )
+}
 
 function TerminalPicker() {
   const terminalApp = useThemeStore((s) => s.terminalApp)
@@ -121,6 +173,8 @@ export function SettingsPopover() {
   const setThemeMode = useThemeStore((s) => s.setThemeMode)
   const expandedUI = useThemeStore((s) => s.expandedUI)
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
+  const pillScale = useThemeStore((s) => s.pillScale)
+  const setPillScale = useThemeStore((s) => s.setPillScale)
   const isExpanded = useSessionStore((s) => s.isExpanded)
   const popoverLayer = usePopoverLayer()
   const colors = useColors()
@@ -128,31 +182,37 @@ export function SettingsPopover() {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ right: number; top?: number; bottom?: number; maxHeight?: number }>({ right: 0 })
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight?: number }>({ left: 0, width: 240 })
 
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
-    const gap = 6 // Match HistoryPicker spacing exactly.
     const margin = 8
-    const right = window.innerWidth - rect.right
+    // Anchor to the content column — same parent the Marketplace panel centers in.
+    // The column is the source of truth for horizontal centering.
+    const column = document.querySelector('[data-clui-column]')
+    const colRect = column ? column.getBoundingClientRect() : rect
+    const centerX = colRect.left + colRect.width / 2
+    // Match the card width (narrower than column due to margins in collapsed state)
+    const card = triggerRef.current.closest('.drag-region')
+    const cardRect = card ? card.getBoundingClientRect() : colRect
+    const popoverWidth = cardRect.width
 
     if (isExpanded) {
-      // Keep anchored below trigger (so it never covers the dots button),
-      // and shrink if needed instead of shifting upward onto the trigger.
-      const top = rect.bottom + gap
+      const top = rect.bottom + 14
       setPos({
+        left: centerX,
+        width: popoverWidth,
         top,
-        right,
         maxHeight: Math.max(120, window.innerHeight - top - margin),
       })
       return
     }
 
-    // Same logic as HistoryPicker for collapsed mode: open upward from trigger.
     setPos({
-      bottom: window.innerHeight - rect.top + gap,
-      right,
+      left: centerX,
+      width: popoverWidth,
+      bottom: window.innerHeight - rect.top + 14,
       maxHeight: undefined,
     })
   }, [isExpanded])
@@ -176,20 +236,35 @@ export function SettingsPopover() {
     return () => window.removeEventListener('resize', onResize)
   }, [open, updatePos])
 
-  // Keep panel tracking the trigger continuously while open so it follows
-  // width/position animations of the top bar without feeling "stuck in space."
+  // Track whether the width slider is being dragged — freeze position + width during drag
+  const [scaleActive, setScaleActive] = useState(false)
+  const [gliding, setGliding] = useState(false)
+  const frozenWidth = useRef(240)
+
   useEffect(() => {
-    if (!open) return
-    let raf = 0
-    const tick = () => {
+    const onStart = () => {
+      const card = document.querySelector('.drag-region') as HTMLElement | null
+      frozenWidth.current = card ? card.getBoundingClientRect().width : 240
+      setScaleActive(true)
+    }
+    const onEnd = () => {
+      setScaleActive(false)
+      setGliding(true)
       updatePos()
-      raf = requestAnimationFrame(tick)
+      setTimeout(() => setGliding(false), 250)
     }
-    raf = requestAnimationFrame(tick)
+    window.addEventListener('clui-scale-start', onStart)
+    window.addEventListener('clui-scale-done', onEnd)
     return () => {
-      if (raf) cancelAnimationFrame(raf)
+      window.removeEventListener('clui-scale-start', onStart)
+      window.removeEventListener('clui-scale-done', onEnd)
     }
-  }, [open, expandedUI, isExpanded, updatePos])
+  }, [updatePos])
+
+  // Reposition when expand/collapse changes — but NOT during slider drag
+  useEffect(() => {
+    if (open && !scaleActive) updatePos()
+  }, [open, expandedUI, isExpanded, updatePos, scaleActive])
 
   const handleToggle = () => {
     if (!open) updatePos()
@@ -216,14 +291,16 @@ export function SettingsPopover() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           transition={{ duration: 0.12 }}
-          className="rounded-xl"
           style={{
             position: 'fixed',
             ...(pos.top != null ? { top: pos.top } : {}),
             ...(pos.bottom != null ? { bottom: pos.bottom } : {}),
-            right: pos.right,
-            width: 240,
+            left: pos.left,
+            transform: 'translateX(-50%)',
+            width: scaleActive ? frozenWidth.current : pos.width,
             pointerEvents: 'auto',
+            transition: gliding ? 'left 0.25s ease, width 0.25s ease' : 'none',
+            borderRadius: 24,
             background: colors.popoverBg,
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
@@ -233,6 +310,11 @@ export function SettingsPopover() {
           }}
         >
           <div className="p-3 flex flex-col gap-2.5">
+            {/* Pill scale */}
+            <PillScaleSlider />
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
             {/* Full width */}
             <div>
               <div className="flex items-center justify-between gap-3">
@@ -246,6 +328,7 @@ export function SettingsPopover() {
                   checked={expandedUI}
                   onChange={(next) => {
                     setExpandedUI(next)
+                    setPillScale(next ? 150 : 100)
                   }}
                   colors={colors}
                   label="Toggle full width panel"
