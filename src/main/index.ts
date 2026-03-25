@@ -32,8 +32,18 @@ const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
-const BAR_WIDTH = 1400
+const MAX_BAR_WIDTH = 1400
 const PILL_HEIGHT = 720  // Fixed native window height — extra room for expanded UI + shadow buffers
+
+/** Clamp window width to screen — prevents overflow on smaller displays (e.g. 13" MacBook) */
+function getBarWidth(): number {
+  try {
+    const { width } = screen.getPrimaryDisplay().workAreaSize
+    return Math.min(MAX_BAR_WIDTH, width)
+  } catch {
+    return MAX_BAR_WIDTH
+  }
+}
 const BASE_BOTTOM_MARGIN = 24
 
 /**
@@ -128,11 +138,11 @@ function createWindow(): void {
   const { width: screenWidth, height: screenHeight } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
 
-  const x = dx + Math.round((screenWidth - BAR_WIDTH) / 2)
+  const x = dx + Math.round((screenWidth - getBarWidth()) / 2)
   const y = dy + screenHeight - PILL_HEIGHT - getBottomMargin(display)
 
   mainWindow = new BrowserWindow({
-    width: BAR_WIDTH,
+    width: getBarWidth(),
     height: PILL_HEIGHT,
     x,
     y,
@@ -197,9 +207,9 @@ function showWindow(source = 'unknown'): void {
   const { width: sw, height: sh } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
   mainWindow.setBounds({
-    x: dx + Math.round((sw - BAR_WIDTH) / 2),
+    x: dx + Math.round((sw - getBarWidth()) / 2),
     y: dy + sh - PILL_HEIGHT - getBottomMargin(display),
-    width: BAR_WIDTH,
+    width: getBarWidth(),
     height: PILL_HEIGHT,
   })
 
@@ -1085,9 +1095,9 @@ app.whenReady().then(async () => {
         const { width: sw, height: sh } = display.workAreaSize
         const { x: dx, y: dy } = display.workArea
         mainWindow.setBounds({
-          x: dx + Math.round((sw - BAR_WIDTH) / 2),
+          x: dx + Math.round((sw - getBarWidth()) / 2),
           y: dy + sh - PILL_HEIGHT - getBottomMargin(display),
-          width: BAR_WIDTH,
+          width: getBarWidth(),
           height: PILL_HEIGHT,
         })
         log(`[spaces] repositioned for workArea change`)
