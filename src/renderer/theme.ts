@@ -281,6 +281,7 @@ interface ThemeState {
   expandedUI: boolean
   pillScale: number
   terminalApp: TerminalId
+  settingsOpen: boolean
   /** OS-reported dark mode — used when themeMode is 'system' */
   _systemIsDark: boolean
   setIsDark: (isDark: boolean) => void
@@ -289,6 +290,7 @@ interface ThemeState {
   setExpandedUI: (expanded: boolean) => void
   setPillScale: (scale: number) => void
   setTerminalApp: (id: TerminalId) => void
+  toggleSettings: () => void
   /** Called by OS theme change listener — updates system value */
   setSystemTheme: (isDark: boolean) => void
 }
@@ -345,6 +347,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   expandedUI: saved.expandedUI,
   pillScale: saved.pillScale,
   terminalApp: saved.terminalApp,
+  settingsOpen: false,
   _systemIsDark: true,
   setIsDark: (isDark) => {
     set({ isDark })
@@ -373,6 +376,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ terminalApp: id })
     saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, pillScale: get().pillScale, terminalApp: id })
   },
+  toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
   setSystemTheme: (isDark) => {
     set({ _systemIsDark: isDark })
     // Only apply if following system
