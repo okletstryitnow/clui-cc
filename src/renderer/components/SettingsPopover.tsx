@@ -77,9 +77,11 @@ function PillScaleSlider() {
         }}
         onPointerDown={() => {
           setDragging(true)
+          window.dispatchEvent(new CustomEvent('clui-scale-start'))
         }}
         onPointerUp={() => {
           setDragging(false)
+          window.dispatchEvent(new CustomEvent('clui-scale-done'))
         }}
         className="w-full mt-1 cursor-pointer"
         style={{ accentColor: colors.accent, height: 4 }}
@@ -255,6 +257,7 @@ export function SettingsPopover() {
 
   return (
     <button
+      data-settings-trigger
       onClick={toggleSettings}
       className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
       style={{ color: colors.textTertiary }}

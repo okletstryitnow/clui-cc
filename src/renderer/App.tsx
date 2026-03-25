@@ -107,6 +107,34 @@ export default function App() {
   const cardCollapsedMargin = expandedUI ? 15 : 15
   const bodyMaxHeight = expandedUI ? 520 : 400
 
+  // Close settings on click outside the settings panel
+  useEffect(() => {
+    if (!settingsOpen) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      // Don't close if clicking inside the settings panel or on the trigger button
+      if (target.closest?.('[data-settings-panel]') || target.closest?.('[data-settings-trigger]')) return
+      useThemeStore.getState().toggleSettings()
+    }
+    // Use setTimeout to avoid the opening click immediately closing it
+    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handler)
+    }
+  }, [settingsOpen])
+
+  // Close settings when width slider starts dragging
+  useEffect(() => {
+    const onScaleStart = () => {
+      if (useThemeStore.getState().settingsOpen) {
+        useThemeStore.getState().toggleSettings()
+      }
+    }
+    window.addEventListener('clui-scale-start', onScaleStart)
+    return () => window.removeEventListener('clui-scale-start', onScaleStart)
+  }, [])
+
   const handleScreenshot = useCallback(async () => {
     const result = await window.clui.takeScreenshot()
     if (!result) return
@@ -165,6 +193,7 @@ export default function App() {
             {settingsOpen && !marketplaceOpen && (
               <div
                 data-clui-ui
+                data-settings-panel
                 style={{
                   width: isExpanded ? cardExpandedWidth : cardCollapsedWidth,
                   marginLeft: '50%',
@@ -182,8 +211,8 @@ export default function App() {
                 >
                   <div
                     data-clui-ui
-                    className="glass-surface overflow-hidden no-drag"
-                    style={{ borderRadius: 24 }}
+                    className="glass-surface no-drag"
+                    style={{ borderRadius: 24, maxHeight: 400, overflowY: 'auto' as const }}
                   >
                     <SettingsContent />
                   </div>

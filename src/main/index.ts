@@ -32,18 +32,8 @@ const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
-const MAX_BAR_WIDTH = 1400
+const BAR_WIDTH = 1400
 const PILL_HEIGHT = 720  // Fixed native window height — extra room for expanded UI + shadow buffers
-
-/** Clamp window width to screen — prevents overflow on smaller displays (e.g. 13" MacBook) */
-function getBarWidth(): number {
-  try {
-    const { width } = screen.getPrimaryDisplay().workAreaSize
-    return Math.min(MAX_BAR_WIDTH, width)
-  } catch {
-    return MAX_BAR_WIDTH
-  }
-}
 const BASE_BOTTOM_MARGIN = 24
 
 /**
@@ -138,11 +128,11 @@ function createWindow(): void {
   const { width: screenWidth, height: screenHeight } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
 
-  const x = dx + Math.round((screenWidth - getBarWidth()) / 2)
+  const x = dx + Math.round((screenWidth - BAR_WIDTH) / 2)
   const y = dy + screenHeight - PILL_HEIGHT - getBottomMargin(display)
 
   mainWindow = new BrowserWindow({
-    width: getBarWidth(),
+    width: BAR_WIDTH,
     height: PILL_HEIGHT,
     x,
     y,
@@ -170,15 +160,32 @@ function createWindow(): void {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
-    // Enable OS-level click-through for transparent regions.
-    // { forward: true } ensures mousemove events still reach the renderer
-    // so it can toggle click-through off when cursor enters interactive UI.
-    mainWindow?.setIgnoreMouseEvents(true, { forward: true })
+  let shown = false
+  const doShow = (source: string) => {
+    if (shown || !mainWindow) return
+    shown = true
+    const bounds = mainWindow.getBounds()
+    log(`Window show (${source}) bounds=${JSON.stringify(bounds)} visible=${mainWindow.isVisible()}`)
+    mainWindow.show()
+    const afterBounds = mainWindow.getBounds()
+    log(`Window after show bounds=${JSON.stringify(afterBounds)} visible=${mainWindow.isVisible()}`)
+    mainWindow.setIgnoreMouseEvents(true, { forward: true })
     if (process.env.ELECTRON_RENDERER_URL) {
-      mainWindow?.webContents.openDevTools({ mode: 'detach' })
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
+  }
+
+  mainWindow.once('ready-to-show', () => doShow('ready-to-show'))
+
+  // Fallback: if ready-to-show never fires (renderer error), force show after 5s
+  setTimeout(() => doShow('fallback-timeout'), 5000)
+
+  // Log renderer crashes
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    log(`Renderer crashed: ${details.reason} exitCode=${details.exitCode}`)
+  })
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc) => {
+    log(`Renderer failed to load: ${code} ${desc}`)
   })
 
   let forceQuit = false
@@ -207,9 +214,9 @@ function showWindow(source = 'unknown'): void {
   const { width: sw, height: sh } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
   mainWindow.setBounds({
-    x: dx + Math.round((sw - getBarWidth()) / 2),
+    x: dx + Math.round((sw - BAR_WIDTH) / 2),
     y: dy + sh - PILL_HEIGHT - getBottomMargin(display),
-    width: getBarWidth(),
+    width: BAR_WIDTH,
     height: PILL_HEIGHT,
   })
 
@@ -1095,9 +1102,9 @@ app.whenReady().then(async () => {
         const { width: sw, height: sh } = display.workAreaSize
         const { x: dx, y: dy } = display.workArea
         mainWindow.setBounds({
-          x: dx + Math.round((sw - getBarWidth()) / 2),
+          x: dx + Math.round((sw - BAR_WIDTH) / 2),
           y: dy + sh - PILL_HEIGHT - getBottomMargin(display),
-          width: getBarWidth(),
+          width: BAR_WIDTH,
           height: PILL_HEIGHT,
         })
         log(`[spaces] repositioned for workArea change`)
