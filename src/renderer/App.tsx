@@ -7,6 +7,7 @@ import { InputBar } from './components/InputBar'
 import { StatusBar } from './components/StatusBar'
 import { MarketplacePanel } from './components/MarketplacePanel'
 import { SettingsContent } from './components/SettingsPopover'
+import { HistoryContent } from './components/HistoryPicker'
 import { PopoverLayerProvider } from './components/PopoverLayer'
 import { useClaudeEvents } from './hooks/useClaudeEvents'
 import { useHealthReconciliation } from './hooks/useHealthReconciliation'
@@ -94,6 +95,7 @@ export default function App() {
 
   const isExpanded = useSessionStore((s) => s.isExpanded)
   const marketplaceOpen = useSessionStore((s) => s.marketplaceOpen)
+  const historyOpen = useSessionStore((s) => s.historyOpen)
   const settingsOpen = useThemeStore((s) => s.settingsOpen)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
 
@@ -107,16 +109,24 @@ export default function App() {
   const cardCollapsedMargin = expandedUI ? 15 : 15
   const bodyMaxHeight = expandedUI ? 520 : 400
 
+  // Mutual exclusion: when settings opens, close history + marketplace + collapse chat
+  useEffect(() => {
+    if (settingsOpen) {
+      const ss = useSessionStore.getState()
+      if (ss.historyOpen) useSessionStore.setState({ historyOpen: false })
+      if (ss.marketplaceOpen) useSessionStore.setState({ marketplaceOpen: false })
+      if (ss.isExpanded) useSessionStore.setState({ isExpanded: false })
+    }
+  }, [settingsOpen])
+
   // Close settings on click outside the settings panel
   useEffect(() => {
     if (!settingsOpen) return
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      // Don't close if clicking inside the settings panel or on the trigger button
       if (target.closest?.('[data-settings-panel]') || target.closest?.('[data-settings-trigger]')) return
       useThemeStore.getState().toggleSettings()
     }
-    // Use setTimeout to avoid the opening click immediately closing it
     const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0)
     return () => {
       clearTimeout(timer)
@@ -124,12 +134,26 @@ export default function App() {
     }
   }, [settingsOpen])
 
+  // Close history on click outside the history panel
+  useEffect(() => {
+    if (!historyOpen) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest?.('[data-history-panel]') || target.closest?.('[data-history-trigger]')) return
+      useSessionStore.setState({ historyOpen: false })
+    }
+    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handler)
+    }
+  }, [historyOpen])
+
   // Close settings when width slider starts dragging
   useEffect(() => {
     const onScaleStart = () => {
-      if (useThemeStore.getState().settingsOpen) {
-        useThemeStore.getState().toggleSettings()
-      }
+      if (useThemeStore.getState().settingsOpen) useThemeStore.getState().toggleSettings()
+      if (useSessionStore.getState().historyOpen) useSessionStore.setState({ historyOpen: false })
     }
     window.addEventListener('clui-scale-start', onScaleStart)
     return () => window.removeEventListener('clui-scale-start', onScaleStart)
@@ -215,6 +239,38 @@ export default function App() {
                     style={{ borderRadius: 24, maxHeight: 400, overflowY: 'auto' as const }}
                   >
                     <SettingsContent />
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {historyOpen && !marketplaceOpen && !settingsOpen && (
+              <div
+                data-clui-ui
+                data-history-panel
+                style={{
+                  width: isExpanded ? cardExpandedWidth : cardCollapsedWidth,
+                  marginLeft: '50%',
+                  transform: 'translateX(-50%)',
+                  marginBottom: 14,
+                  position: 'relative',
+                  zIndex: 25,
+                }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.985 }}
+                  transition={TRANSITION}
+                >
+                  <div
+                    data-clui-ui
+                    className="glass-surface no-drag"
+                    style={{ borderRadius: 24, maxHeight: 350, overflowY: 'auto' as const }}
+                  >
+                    <HistoryContent />
                   </div>
                 </motion.div>
               </div>
